@@ -295,6 +295,47 @@ func AffineEncryption(data EncryptionData) ([]rune, error) {
 	return encryptedText, nil
 }
 
+type ErrInvalidSubstitutionKey string
+
+func (e ErrInvalidSubstitutionKey) Error() string {
+	return fmt.Sprintf("invalid substitution key: %s", string(e))
+}
+
+func SubstitutionEncryption(data EncryptionData) ([]rune, error) {
+	if len(data.Key) != len(data.Alph) {
+		return nil, ErrInvalidSubstitutionKey("key and alphabet length doesn't match")
+	}
+
+	substitutionMap := make(map[rune]rune)
+	existsMap := make(map[rune]struct{})
+
+	for i, v := range data.Key {
+		if _, ok := data.AlphMap[v]; !ok {
+			return nil, ErrInvalidSubstitutionKey(fmt.Sprintf("%c isn't contained in alphabet", v))
+		}
+
+		if _, ok := existsMap[v]; ok {
+			return nil, ErrInvalidSubstitutionKey(fmt.Sprintf("%c is contained twice", v))
+		}
+
+		existsMap[v] = struct{}{}
+
+		if data.isDecrypt {
+			substitutionMap[v] = data.Alph[i]
+		} else {
+			substitutionMap[data.Alph[i]] = v
+		}
+	}
+
+	encryptedText := make([]rune, len(data.Text))
+
+	for i, v := range data.Text {
+		encryptedText[i] = substitutionMap[v]
+	}
+
+	return encryptedText, nil
+}
+
 func main() {
 	rootCommand := &cobra.Command{
 		Use:   "encryption",
@@ -363,8 +404,28 @@ func main() {
 		},
 	}
 
+	substitutionEncryptionCommand := &cobra.Command{
+		Use:   "substitution",
+		Short: "Substitution encryption",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			data, err := NewEncryptionData(alphFileName, textFileName, keyFileName, isDecrypt)
+			if err != nil {
+				return fmt.Errorf("invalid input: %w", err)
+			}
+
+			encryptedText, err := SubstitutionEncryption(data)
+			if err != nil {
+				return fmt.Errorf("cannot apply substitution encryption: %w", err)
+			}
+
+			fmt.Println(string(encryptedText))
+			return nil
+		},
+	}
+
 	rootCommand.AddCommand(shiftEncryptionCommand)
 	rootCommand.AddCommand(affineEncryptionCommand)
+	rootCommand.AddCommand(substitutionEncryptionCommand)
 
 	if err := rootCommand.Execute(); err != nil {
 		// ignore error as cobra itself displays it on the screen
