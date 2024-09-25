@@ -1,7 +1,11 @@
 package main
 
 import (
+	"crypto/rand"
 	"fmt"
+	"log/slog"
+	"math"
+	"math/big"
 	"os"
 	"strconv"
 	"strings"
@@ -65,18 +69,6 @@ func ValidateText(text []rune, alphMap map[rune]int) error {
 
 const defaultAlph = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ "
 
-type ErrEmptyTextFlag struct{}
-
-func (e ErrEmptyTextFlag) Error() string {
-	return "text flag isn't specified"
-}
-
-type ErrEmptyKeyFlag struct{}
-
-func (e ErrEmptyKeyFlag) Error() string {
-	return "key flag isn't specified"
-}
-
 type EncryptionData struct {
 	Text      []rune
 	Key       []rune
@@ -85,7 +77,10 @@ type EncryptionData struct {
 	isDecrypt bool
 }
 
-func NewEncryptionData(alphFileName, textFileName, keyFileName string, isDecrypt bool) (EncryptionData, error) {
+func NewEncryptionData(
+	alphFileName, textFileName, keyFileName string,
+	isDecrypt bool,
+) (EncryptionData, error) {
 	data := EncryptionData{}
 
 	if len(alphFileName) == 0 {
@@ -104,10 +99,6 @@ func NewEncryptionData(alphFileName, textFileName, keyFileName string, isDecrypt
 
 	data.AlphMap = GetMapFromAlph(data.Alph)
 
-	if len(textFileName) == 0 {
-		return EncryptionData{}, ErrEmptyTextFlag{}
-	}
-
 	text, err := os.ReadFile(textFileName)
 	if err != nil {
 		return EncryptionData{}, fmt.Errorf("cannot read text file %q: %w", textFileName, err)
@@ -116,10 +107,6 @@ func NewEncryptionData(alphFileName, textFileName, keyFileName string, isDecrypt
 	data.Text = []rune(string(text))
 	if err := ValidateText(data.Text, data.AlphMap); err != nil {
 		return EncryptionData{}, fmt.Errorf("invalid text: %w", err)
-	}
-
-	if len(keyFileName) == 0 {
-		return EncryptionData{}, ErrEmptyKeyFlag{}
 	}
 
 	key, err := os.ReadFile(keyFileName)
@@ -336,6 +323,109 @@ func SubstitutionEncryption(data EncryptionData) ([]rune, error) {
 	return encryptedText, nil
 }
 
+type ErrInvalidHillKey string
+
+func (e ErrInvalidHillKey) Error() string {
+	return fmt.Sprintf("invalid hill key: %s", string(e))
+}
+
+type Matrix2x2 struct {
+	K11 int
+	K12 int
+	K21 int
+	K22 int
+}
+
+func (m Matrix2x2) Determinant(mod int) int {
+	det := (m.K11*m.K22 - m.K12*m.K21) % mod
+	det = (det + mod) % mod
+
+	return det
+}
+
+func (m Matrix2x2) Inverse(mod int) Matrix2x2 {
+	inv := Matrix2x2{
+		K11: m.K22,
+		K12: (-m.K12) % mod,
+		K21: (-m.K21) % mod,
+		K22: m.K11,
+	}
+
+	det := m.Determinant(mod)
+	revDet := GetReversed(det, mod)
+
+	inv.K11 = (inv.K11 * revDet) % mod
+
+	inv.K12 = (inv.K12 + mod) % mod
+	inv.K12 = (inv.K12 * revDet) % mod
+
+	inv.K21 = (inv.K21 + mod) % mod
+	inv.K21 = (inv.K21 * revDet) % mod
+
+	inv.K22 = (inv.K22 * revDet) % mod
+
+	return inv
+}
+
+const (
+	hill2x2KeyLength = 4
+)
+
+func Hill2x2Encryption(data EncryptionData) ([]rune, error) {
+	if len(data.Key) != hill2x2KeyLength {
+		return nil, ErrInvalidHillKey("length must be equal 4")
+	}
+
+	for _, v := range data.Key {
+		if _, ok := data.AlphMap[v]; !ok {
+			return nil, ErrInvalidHillKey(fmt.Sprintf("%c isn't contained in alphabet", v))
+		}
+	}
+
+	matrix := Matrix2x2{
+		K11: data.AlphMap[data.Key[0]],
+		K12: data.AlphMap[data.Key[1]],
+		K21: data.AlphMap[data.Key[2]],
+		K22: data.AlphMap[data.Key[3]],
+	}
+
+	if det := matrix.Determinant(len(data.Alph)); det == 0 {
+		return nil, ErrInvalidHillKey("key determinant mustn't be equal 0")
+	}
+
+	if data.isDecrypt {
+		matrix = matrix.Inverse(len(data.Alph))
+	}
+
+	hillKeyBatchLength := int(math.Sqrt(hill2x2KeyLength))
+
+	if len(data.Text)%hillKeyBatchLength != 0 {
+		maxValue := big.NewInt(int64(len(data.Alph)))
+
+		randID, err := rand.Int(rand.Reader, maxValue)
+		if err != nil {
+			return nil, fmt.Errorf("cannot generate random index for alphabet: %w", err)
+		}
+
+		data.Text = append(data.Text, data.Alph[randID.Int64()])
+	}
+
+	encryptedText := make([]rune, len(data.Text))
+
+	for i := 0; i < len(data.Text); i += 2 {
+		first, second := data.AlphMap[data.Text[i]], data.AlphMap[data.Text[i+1]]
+		first, second = (first*matrix.K11+second*matrix.K21)%len(
+			data.Alph,
+		), (first*matrix.K12+second*matrix.K22)%len(
+			data.Alph,
+		)
+
+		encryptedText[i], encryptedText[i+1] = data.Alph[first], data.Alph[second]
+	}
+
+	return encryptedText, nil
+}
+
 func main() {
 	rootCommand := &cobra.Command{
 		Use:   "encryption",
@@ -357,11 +447,17 @@ func main() {
 
 	rootCommand.PersistentFlags().
 		StringVarP(&textFileName, "text", "t", "", "specify text for encryption/decryption")
-	rootCommand.MarkFlagRequired("text")
+
+	if err := rootCommand.MarkPersistentFlagRequired("text"); err != nil {
+		slog.Error("cannot make text flag required")
+	}
 
 	rootCommand.PersistentFlags().
 		StringVarP(&keyFileName, "key", "k", "", "specify key for encryption/decryption")
-	rootCommand.MarkFlagRequired("key")
+
+	if err := rootCommand.MarkPersistentFlagRequired("key"); err != nil {
+		slog.Error("cannot make key flag required")
+	}
 
 	rootCommand.PersistentFlags().
 		BoolVarP(&isDecrypt, "decrypt", "d", false, "decrypt text if true")
@@ -423,9 +519,29 @@ func main() {
 		},
 	}
 
+	hillEncryptionCommand := &cobra.Command{
+		Use:   "hill",
+		Short: "Hill 2x2 encryption",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			data, err := NewEncryptionData(alphFileName, textFileName, keyFileName, isDecrypt)
+			if err != nil {
+				return fmt.Errorf("invalid input: %w", err)
+			}
+
+			encryptedText, err := Hill2x2Encryption(data)
+			if err != nil {
+				return fmt.Errorf("cannot apply hill 2x2 encryption: %w", err)
+			}
+
+			fmt.Println(string(encryptedText))
+			return nil
+		},
+	}
+
 	rootCommand.AddCommand(shiftEncryptionCommand)
 	rootCommand.AddCommand(affineEncryptionCommand)
 	rootCommand.AddCommand(substitutionEncryptionCommand)
+	rootCommand.AddCommand(hillEncryptionCommand)
 
 	if err := rootCommand.Execute(); err != nil {
 		// ignore error as cobra itself displays it on the screen
