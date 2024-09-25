@@ -407,7 +407,11 @@ func Hill2x2Encryption(data EncryptionData) ([]rune, error) {
 			return nil, fmt.Errorf("cannot generate random index for alphabet: %w", err)
 		}
 
-		data.Text = append(data.Text, data.Alph[randID.Int64()])
+		extraSymbol := data.Alph[randID.Int64()]
+
+		for len(data.Text)%hillKeyBatchLength != 0 {
+			data.Text = append(data.Text, extraSymbol)
+		}
 	}
 
 	encryptedText := make([]rune, len(data.Text))
