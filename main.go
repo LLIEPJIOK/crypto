@@ -527,6 +527,14 @@ func ViginereEncryption(data EncryptionData) ([]rune, error) {
 	return encryptionText, nil
 }
 
+func PrintSuccessfulMsg(isDecrypt bool, outputFileName string) {
+	if isDecrypt {
+		fmt.Printf("text successfully decrypted in file %s\n", outputFileName)
+	} else {
+		fmt.Printf("text successfully encrypted in file %s\n", outputFileName)
+	}
+}
+
 func main() {
 	rootCommand := &cobra.Command{
 		Use:   "encryption",
@@ -541,6 +549,7 @@ func main() {
 		textFileName     string
 		keyFileName      string
 		isDecrypt        bool
+		outputFileName   string
 	)
 
 	rootCommand.PersistentFlags().
@@ -563,6 +572,9 @@ func main() {
 	rootCommand.PersistentFlags().
 		BoolVarP(&isDecrypt, "decrypt", "d", false, "decrypt text if true")
 
+	rootCommand.PersistentFlags().
+		StringVarP(&outputFileName, "output", "o", "output.txt", "specify output file for encrypted/decrypted text")
+
 	shiftEncryptionCommand := &cobra.Command{
 		Use:   "shift",
 		Short: "Shift encryption",
@@ -577,7 +589,12 @@ func main() {
 				return fmt.Errorf("shift encryption: %w", err)
 			}
 
-			fmt.Println(string(encryptionText))
+			if err := os.WriteFile(outputFileName, []byte(string(encryptionText)), 0o600); err != nil {
+				return fmt.Errorf("write file %q: %w", outputFileName, err)
+			}
+
+			PrintSuccessfulMsg(data.isDecrypt, outputFileName)
+
 			return nil
 		},
 	}
@@ -596,7 +613,12 @@ func main() {
 				return fmt.Errorf("affine encryption: %w", err)
 			}
 
-			fmt.Println(string(encryptionText))
+			if err := os.WriteFile(outputFileName, []byte(string(encryptionText)), 0o600); err != nil {
+				return fmt.Errorf("write file %q: %w", outputFileName, err)
+			}
+
+			PrintSuccessfulMsg(data.isDecrypt, outputFileName)
+
 			return nil
 		},
 	}
@@ -615,7 +637,12 @@ func main() {
 				return fmt.Errorf("substitution encryption: %w", err)
 			}
 
-			fmt.Println(string(encryptionText))
+			if err := os.WriteFile(outputFileName, []byte(string(encryptionText)), 0o600); err != nil {
+				return fmt.Errorf("write file %q: %w", outputFileName, err)
+			}
+
+			PrintSuccessfulMsg(data.isDecrypt, outputFileName)
+
 			return nil
 		},
 	}
@@ -634,7 +661,12 @@ func main() {
 				return fmt.Errorf("hill 2x2 encryption: %w", err)
 			}
 
-			fmt.Println(string(encryptionText))
+			if err := os.WriteFile(outputFileName, []byte(string(encryptionText)), 0o600); err != nil {
+				return fmt.Errorf("write file %q: %w", outputFileName, err)
+			}
+
+			PrintSuccessfulMsg(data.isDecrypt, outputFileName)
+
 			return nil
 		},
 	}
@@ -653,7 +685,12 @@ func main() {
 				return fmt.Errorf("transposition encryption: %w", err)
 			}
 
-			fmt.Println(string(encryptionText))
+			if err := os.WriteFile(outputFileName, []byte(string(encryptionText)), 0o600); err != nil {
+				return fmt.Errorf("write file %q: %w", outputFileName, err)
+			}
+
+			PrintSuccessfulMsg(data.isDecrypt, outputFileName)
+
 			return nil
 		},
 	}
@@ -672,7 +709,12 @@ func main() {
 				return fmt.Errorf("vigenere encryption: %w", err)
 			}
 
-			fmt.Println(string(encryptionText))
+			if err := os.WriteFile(outputFileName, []byte(string(encryptionText)), 0o600); err != nil {
+				return fmt.Errorf("write file %q: %w", outputFileName, err)
+			}
+
+			PrintSuccessfulMsg(data.isDecrypt, outputFileName)
+
 			return nil
 		},
 	}
