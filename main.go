@@ -13,6 +13,42 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type ErrAlphabet struct {
+	msg string
+}
+
+func NewErrAlphabet(msg string) error {
+	return ErrAlphabet{msg: msg}
+}
+
+func (e ErrAlphabet) Error() string {
+	return e.msg
+}
+
+type ErrText struct {
+	msg string
+}
+
+func NewErrText(msg string) error {
+	return ErrText{msg: msg}
+}
+
+func (e ErrText) Error() string {
+	return e.msg
+}
+
+type ErrKey struct {
+	msg string
+}
+
+func NewErrKey(msg string) error {
+	return ErrKey{msg: msg}
+}
+
+func (e ErrKey) Error() string {
+	return e.msg
+}
+
 func GetMapFromAlphabet(alphabet []rune) map[rune]int {
 	alphabetMap := make(map[rune]int)
 
@@ -23,44 +59,48 @@ func GetMapFromAlphabet(alphabet []rune) map[rune]int {
 	return alphabetMap
 }
 
-type ErrEmptyAlphabet struct{}
-
-func (e ErrEmptyAlphabet) Error() string {
-	return "empty alphabet"
-}
-
-type ErrRepeatingAlphabetSymbols string
-
-func (e ErrRepeatingAlphabetSymbols) Error() string {
-	return fmt.Sprintf("repeating symbols in alphabet = %q", string(e))
-}
-
 func ValidateAlphabet(alphabet []rune) error {
 	if len(alphabet) == 0 {
-		return ErrEmptyAlphabet{}
+		return NewErrAlphabet("alphabet is empty")
 	}
 
 	runeMap := make(map[rune]struct{})
 
 	for _, v := range alphabet {
 		if _, ok := runeMap[v]; ok {
-			return ErrRepeatingAlphabetSymbols(alphabet)
+			return NewErrAlphabet(fmt.Sprintf("symbol `%c` repeating in alphabet", v))
 		}
 	}
 
 	return nil
 }
 
-type ErrNoSymbolInAlphabet rune
+func ValidateString(str []rune, name string, alphabetMap map[rune]int) error {
+	for _, v := range str {
+		if _, ok := alphabetMap[v]; !ok {
+			return NewErrText(
+				fmt.Sprintf("%s contains symbol '%c' that isn't in alphabet", name, v),
+			)
+		}
+	}
 
-func (e ErrNoSymbolInAlphabet) Error() string {
-	return fmt.Sprintf("text contains symbol '%c' that isn't in alphabet", e)
+	return nil
 }
 
 func ValidateText(text []rune, alphabetMap map[rune]int) error {
 	for _, v := range text {
 		if _, ok := alphabetMap[v]; !ok {
-			return ErrNoSymbolInAlphabet(v)
+			return NewErrText(fmt.Sprintf("text contains symbol '%c' that isn't in alphabet", v))
+		}
+	}
+
+	return nil
+}
+
+func ValidateKey(key []rune, alphabetMap map[rune]int) error {
+	for _, v := range key {
+		if _, ok := alphabetMap[v]; !ok {
+			return NewErrKey(fmt.Sprintf("key contains symbol '%c' that isn't in alphabet", v))
 		}
 	}
 
@@ -88,7 +128,7 @@ func NewEncryptionData(
 	} else {
 		alphabet, err := os.ReadFile(alphabetFileName)
 		if err != nil {
-			return EncryptionData{}, fmt.Errorf("cannot read alphabet file %q: %w", alphabetFileName, err)
+			return EncryptionData{}, fmt.Errorf("read alphabet file %q: %w", alphabetFileName, err)
 		}
 
 		data.Alphabet = []rune(string(alphabet))
@@ -101,7 +141,7 @@ func NewEncryptionData(
 
 	text, err := os.ReadFile(textFileName)
 	if err != nil {
-		return EncryptionData{}, fmt.Errorf("cannot read text file %q: %w", textFileName, err)
+		return EncryptionData{}, fmt.Errorf("read text file %q: %w", textFileName, err)
 	}
 
 	data.Text = []rune(string(text))
@@ -111,26 +151,17 @@ func NewEncryptionData(
 
 	key, err := os.ReadFile(keyFileName)
 	if err != nil {
-		return EncryptionData{}, fmt.Errorf("cannot read key file %q: %w", keyFileName, err)
+		return EncryptionData{}, fmt.Errorf("read key file %q: %w", keyFileName, err)
 	}
 
 	data.Key = []rune(string(key))
+	if err := ValidateKey(data.Key, data.AlphabetMap); err != nil {
+		return EncryptionData{}, fmt.Errorf("invalid key: %w", err)
+	}
 
 	data.isDecrypt = isDecrypt
 
 	return data, nil
-}
-
-type ErrInvalidKey struct {
-	msg string
-}
-
-func NewErrInvalidKey(msg string) error {
-	return ErrInvalidKey{msg: msg}
-}
-
-func (e ErrInvalidKey) Error() string {
-	return e.msg
 }
 
 const (
@@ -138,9 +169,10 @@ const (
 )
 
 func ShiftEncryption(data EncryptionData) ([]rune, error) {
-	// todo: check key symbols in alphabet
 	if len(data.Key) != ShiftKeyLen {
-		return nil, NewErrInvalidKey(fmt.Sprintf("shift encryption key length must be equal %d", ShiftKeyLen))
+		return nil, NewErrKey(
+			fmt.Sprintf("shift encryption key length must be equal %d", ShiftKeyLen),
+		)
 	}
 
 	shift := data.AlphabetMap[data.Key[0]]
@@ -210,14 +242,15 @@ const (
 )
 
 func AffineEncryption(data EncryptionData) ([]rune, error) {
-	// todo: check key symbols in alphabet
 	if len(data.Key) != 2 {
-		return nil, NewErrInvalidKey(fmt.Sprintf("affine encryption key length must be equal %d", AffineKeyLen))
+		return nil, NewErrKey(
+			fmt.Sprintf("affine encryption key length must be equal %d", AffineKeyLen),
+		)
 	}
 
 	key1, key2 := data.AlphabetMap[data.Key[0]], data.AlphabetMap[data.Key[1]]
 	if key1 == 0 || GCD(key1, len(data.Alphabet)) != 1 {
-		return nil, NewErrInvalidKey("first affine key symbol must be coprime with alphabet length")
+		return nil, NewErrKey("first affine key symbol must be coprime with alphabet length")
 	}
 
 	if data.isDecrypt {
@@ -238,27 +271,17 @@ func AffineEncryption(data EncryptionData) ([]rune, error) {
 	return encryptionText, nil
 }
 
-type ErrInvalidSubstitutionKey string
-
-func (e ErrInvalidSubstitutionKey) Error() string {
-	return fmt.Sprintf("invalid substitution key: %s", string(e))
-}
-
 func SubstitutionEncryption(data EncryptionData) ([]rune, error) {
 	if len(data.Key) != len(data.Alphabet) {
-		return nil, ErrInvalidSubstitutionKey("key and alphabet length doesn't match")
+		return nil, NewErrKey("substitution key length and alphabet length must match")
 	}
 
 	substitutionMap := make(map[rune]rune)
 	existsMap := make(map[rune]struct{})
 
 	for i, v := range data.Key {
-		if _, ok := data.AlphabetMap[v]; !ok {
-			return nil, ErrInvalidSubstitutionKey(fmt.Sprintf("%c isn't contained in alphabet", v))
-		}
-
 		if _, ok := existsMap[v]; ok {
-			return nil, ErrInvalidSubstitutionKey(fmt.Sprintf("%c is contained twice", v))
+			return nil, NewErrKey(fmt.Sprintf("substitution key symbol `%c` is contained twice", v))
 		}
 
 		existsMap[v] = struct{}{}
@@ -278,14 +301,6 @@ func SubstitutionEncryption(data EncryptionData) ([]rune, error) {
 
 	return encryptionText, nil
 }
-
-type ErrInvalidHillKey string
-
-func (e ErrInvalidHillKey) Error() string {
-	return fmt.Sprintf("invalid hill key: %s", string(e))
-}
-
-type ErrInvalidHillDecryptionText string
 
 type Matrix2x2 struct {
 	K11 int
@@ -348,13 +363,7 @@ const (
 
 func Hill2x2Encryption(data EncryptionData) ([]rune, error) {
 	if len(data.Key) != hill2x2KeyLength {
-		return nil, ErrInvalidHillKey("length must be equal 4")
-	}
-
-	for _, v := range data.Key {
-		if _, ok := data.AlphabetMap[v]; !ok {
-			return nil, ErrInvalidHillKey(fmt.Sprintf("%c isn't contained in alphabet", v))
-		}
+		return nil, NewErrKey(fmt.Sprintf("hill 2x2 key length must be equal %d", hill2x2KeyLength))
 	}
 
 	matrix := Matrix2x2{
@@ -365,7 +374,7 @@ func Hill2x2Encryption(data EncryptionData) ([]rune, error) {
 	}
 
 	if det := matrix.Determinant(len(data.Alphabet)); det == 0 {
-		return nil, ErrInvalidHillKey("key determinant mustn't be equal 0")
+		return nil, NewErrKey("hill key determinant mustn't be equal 0")
 	}
 
 	if data.isDecrypt {
@@ -403,20 +412,6 @@ func Hill2x2Encryption(data EncryptionData) ([]rune, error) {
 	return encryptionText, nil
 }
 
-type ErrInvalidTranspositionKey string
-
-func (e ErrInvalidTranspositionKey) Error() string {
-	return fmt.Sprintf("invalid transposition key: %s", string(e))
-}
-
-type ErrInvalidTextLength struct {
-	msg string
-}
-
-func (e ErrInvalidTextLength) Error() string {
-	return fmt.Sprintf("invalid text length: %s", e.msg)
-}
-
 func TranspositionEncrypt(data EncryptionData) ([]rune, error) {
 	if len(data.Text)%len(data.Key) != 0 {
 		var err error
@@ -452,7 +447,7 @@ func TranspositionEncrypt(data EncryptionData) ([]rune, error) {
 
 func TranspositionDecrypt(data EncryptionData) ([]rune, error) {
 	if len(data.Text)%len(data.Key) != 0 {
-		return nil, ErrInvalidTextLength{msg: "transposition text length must be multiple of key length"}
+		return nil, NewErrText("transposition text length must be multiple of key length")
 	}
 
 	sortedKeyRunes := slices.SortedFunc(slices.Values(data.Key), func(a, b rune) int {
@@ -482,12 +477,10 @@ func Transposition(data EncryptionData) ([]rune, error) {
 	existsMap := make(map[rune]struct{})
 
 	for _, v := range data.Key {
-		if _, ok := data.AlphabetMap[v]; !ok {
-			return nil, ErrInvalidTranspositionKey(fmt.Sprintf("%c isn't contained in alphabet", v))
-		}
-
 		if _, ok := existsMap[v]; ok {
-			return nil, ErrInvalidTranspositionKey(fmt.Sprintf("%c is contained twice", v))
+			return nil, NewErrKey(
+				fmt.Sprintf("transposition key symbol `%c` is contained twice", v),
+			)
 		}
 
 		existsMap[v] = struct{}{}
@@ -514,12 +507,8 @@ func ViginereEncryption(data EncryptionData) ([]rune, error) {
 	existsMap := make(map[rune]struct{})
 
 	for _, v := range data.Key {
-		if _, ok := data.AlphabetMap[v]; !ok {
-			return nil, ErrInvalidTranspositionKey(fmt.Sprintf("%c isn't contained in alphabet", v))
-		}
-
 		if _, ok := existsMap[v]; ok {
-			return nil, ErrInvalidTranspositionKey(fmt.Sprintf("%c is contained twice", v))
+			return nil, NewErrKey(fmt.Sprintf("vigenere key symbol `%c` is contained twice", v))
 		}
 
 		existsMap[v] = struct{}{}
