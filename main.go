@@ -550,14 +550,14 @@ func main() {
 		StringVarP(&textFileName, "text", "t", "", "specify text for encryption/decryption")
 
 	if err := rootCommand.MarkPersistentFlagRequired("text"); err != nil {
-		slog.Error("cannot make text flag required")
+		slog.Error(fmt.Sprintf("cannot make text flag required: %s", err))
 	}
 
 	rootCommand.PersistentFlags().
 		StringVarP(&keyFileName, "key", "k", "", "specify key for encryption/decryption")
 
 	if err := rootCommand.MarkPersistentFlagRequired("key"); err != nil {
-		slog.Error("cannot make key flag required")
+		slog.Error(fmt.Sprintf("cannot make key flag required: %s", err))
 	}
 
 	rootCommand.PersistentFlags().
@@ -574,7 +574,7 @@ func main() {
 
 			encryptionText, err := ShiftEncryption(data)
 			if err != nil {
-				return fmt.Errorf("cannot apply shift encryption: %w", err)
+				return fmt.Errorf("shift encryption: %w", err)
 			}
 
 			fmt.Println(string(encryptionText))
@@ -593,7 +593,7 @@ func main() {
 
 			encryptionText, err := AffineEncryption(data)
 			if err != nil {
-				return fmt.Errorf("cannot apply affine encryption: %w", err)
+				return fmt.Errorf("affine encryption: %w", err)
 			}
 
 			fmt.Println(string(encryptionText))
@@ -612,7 +612,7 @@ func main() {
 
 			encryptionText, err := SubstitutionEncryption(data)
 			if err != nil {
-				return fmt.Errorf("cannot apply substitution encryption: %w", err)
+				return fmt.Errorf("substitution encryption: %w", err)
 			}
 
 			fmt.Println(string(encryptionText))
@@ -631,7 +631,7 @@ func main() {
 
 			encryptionText, err := Hill2x2Encryption(data)
 			if err != nil {
-				return fmt.Errorf("cannot apply hill 2x2 encryption: %w", err)
+				return fmt.Errorf("hill 2x2 encryption: %w", err)
 			}
 
 			fmt.Println(string(encryptionText))
@@ -650,7 +650,7 @@ func main() {
 
 			encryptionText, err := Transposition(data)
 			if err != nil {
-				return fmt.Errorf("cannot apply transposition encryption: %w", err)
+				return fmt.Errorf("transposition encryption: %w", err)
 			}
 
 			fmt.Println(string(encryptionText))
@@ -669,7 +669,7 @@ func main() {
 
 			encryptionText, err := ViginereEncryption(data)
 			if err != nil {
-				return fmt.Errorf("cannot apply vigenere encryption: %w", err)
+				return fmt.Errorf("vigenere encryption: %w", err)
 			}
 
 			fmt.Println(string(encryptionText))
