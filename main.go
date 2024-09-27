@@ -4,100 +4,102 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math"
 	"math/big"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-func GetMapFromAlph(alph []rune) map[rune]int {
-	alphMap := make(map[rune]int)
+func GetMapFromAlphabet(alphabet []rune) map[rune]int {
+	alphabetMap := make(map[rune]int)
 
-	for i, v := range alph {
-		alphMap[v] = i
+	for i, v := range alphabet {
+		alphabetMap[v] = i
 	}
 
-	return alphMap
+	return alphabetMap
 }
 
-type ErrEmptyAlph struct{}
+type ErrEmptyAlphabet struct{}
 
-func (e ErrEmptyAlph) Error() string {
+func (e ErrEmptyAlphabet) Error() string {
 	return "empty alphabet"
 }
 
-type ErrRepeatingAlphSymbols string
+type ErrRepeatingAlphabetSymbols string
 
-func (e ErrRepeatingAlphSymbols) Error() string {
+func (e ErrRepeatingAlphabetSymbols) Error() string {
 	return fmt.Sprintf("repeating symbols in alphabet = %q", string(e))
 }
 
-func ValidateAlph(alph []rune) error {
-	if len(alph) == 0 {
-		return ErrEmptyAlph{}
+func ValidateAlphabet(alphabet []rune) error {
+	if len(alphabet) == 0 {
+		return ErrEmptyAlphabet{}
 	}
 
 	runeMap := make(map[rune]struct{})
 
-	for _, v := range alph {
+	for _, v := range alphabet {
 		if _, ok := runeMap[v]; ok {
-			return ErrRepeatingAlphSymbols(alph)
+			return ErrRepeatingAlphabetSymbols(alphabet)
 		}
 	}
 
 	return nil
 }
 
-type ErrNoSymbolInAlph rune
+type ErrNoSymbolInAlphabet rune
 
-func (e ErrNoSymbolInAlph) Error() string {
+func (e ErrNoSymbolInAlphabet) Error() string {
 	return fmt.Sprintf("text contains symbol '%c' that isn't in alphabet", e)
 }
 
-func ValidateText(text []rune, alphMap map[rune]int) error {
+func ValidateText(text []rune, alphabetMap map[rune]int) error {
 	for _, v := range text {
-		if _, ok := alphMap[v]; !ok {
-			return ErrNoSymbolInAlph(v)
+		if _, ok := alphabetMap[v]; !ok {
+			return ErrNoSymbolInAlphabet(v)
 		}
 	}
 
 	return nil
 }
 
-const defaultAlph = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ "
+const defaultAlphabet = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ "
 
 type EncryptionData struct {
-	Text      []rune
-	Key       []rune
-	Alph      []rune
-	AlphMap   map[rune]int
-	isDecrypt bool
+	Text        []rune
+	Key         []rune
+	Alphabet    []rune
+	AlphabetMap map[rune]int
+	isDecrypt   bool
 }
 
 func NewEncryptionData(
-	alphFileName, textFileName, keyFileName string,
+	alphabetFileName, textFileName, keyFileName string,
 	isDecrypt bool,
 ) (EncryptionData, error) {
 	data := EncryptionData{}
 
-	if len(alphFileName) == 0 {
-		data.Alph = []rune(defaultAlph)
+	if len(alphabetFileName) == 0 {
+		data.Alphabet = []rune(defaultAlphabet)
 	} else {
-		alph, err := os.ReadFile(alphFileName)
+		alphabet, err := os.ReadFile(alphabetFileName)
 		if err != nil {
-			return EncryptionData{}, fmt.Errorf("cannot read alphabet file %q: %w", alphFileName, err)
+			return EncryptionData{}, fmt.Errorf("cannot read alphabet file %q: %w", alphabetFileName, err)
 		}
 
-		data.Alph = []rune(string(alph))
-		if err := ValidateAlph(data.Alph); err != nil {
+		data.Alphabet = []rune(string(alphabet))
+		if err := ValidateAlphabet(data.Alphabet); err != nil {
 			return EncryptionData{}, fmt.Errorf("invalid alphabet: %w", err)
 		}
 	}
 
-	data.AlphMap = GetMapFromAlph(data.Alph)
+	data.AlphabetMap = GetMapFromAlphabet(data.Alphabet)
 
 	text, err := os.ReadFile(textFileName)
 	if err != nil {
@@ -105,7 +107,7 @@ func NewEncryptionData(
 	}
 
 	data.Text = []rune(string(text))
-	if err := ValidateText(data.Text, data.AlphMap); err != nil {
+	if err := ValidateText(data.Text, data.AlphabetMap); err != nil {
 		return EncryptionData{}, fmt.Errorf("invalid text: %w", err)
 	}
 
@@ -122,12 +124,12 @@ func NewEncryptionData(
 }
 
 type ErrKeyOutOfRange struct {
-	key      int
-	alphaLen int
+	key         int
+	alphabetLen int
 }
 
 func (e ErrKeyOutOfRange) Error() string {
-	return fmt.Sprintf("key = %d out of range [0, len(alphabet)-1 = %d]", e.key, e.alphaLen-1)
+	return fmt.Sprintf("key = %d out of range [0, len(alphabet)-1 = %d]", e.key, e.alphabetLen-1)
 }
 
 func ShiftEncryption(data EncryptionData) ([]rune, error) {
@@ -137,10 +139,10 @@ func ShiftEncryption(data EncryptionData) ([]rune, error) {
 	}
 
 	fmt.Println(shift)
-	if shift < 0 || shift >= len(data.Alph) {
+	if shift < 0 || shift >= len(data.Alphabet) {
 		return nil, ErrKeyOutOfRange{
-			key:      shift,
-			alphaLen: len(data.Alph),
+			key:         shift,
+			alphabetLen: len(data.Alphabet),
 		}
 	}
 
@@ -148,16 +150,16 @@ func ShiftEncryption(data EncryptionData) ([]rune, error) {
 		shift *= -1
 	}
 
-	encryptedText := make([]rune, len(data.Text))
+	encryptionText := make([]rune, len(data.Text))
 
 	for i, v := range data.Text {
-		num := data.AlphMap[v]
-		num = (num + shift) % len(data.Alph)
-		num = (num + len(data.Alph)) % len(data.Alph)
-		encryptedText[i] = data.Alph[num]
+		num := data.AlphabetMap[v]
+		num = (num + shift) % len(data.Alphabet)
+		num = (num + len(data.Alphabet)) % len(data.Alphabet)
+		encryptionText[i] = data.Alphabet[num]
 	}
 
-	return encryptedText, nil
+	return encryptionText, nil
 }
 
 type ErrInvalidNumberOfKeys struct {
@@ -169,13 +171,13 @@ func (e ErrInvalidNumberOfKeys) Error() string {
 	return fmt.Sprintf("invalid number of keys: expected: %d, but got: %d", e.expected, e.got)
 }
 
-type ErrFirstKeyNotCoprimeWithAlphaLen struct {
-	key      int
-	alphaLen int
+type ErrFirstKeyNotCoprimeWithAlphabetLen struct {
+	key         int
+	alphabetLen int
 }
 
-func (e ErrFirstKeyNotCoprimeWithAlphaLen) Error() string {
-	return fmt.Sprintf("first key = %d isn't comprime with len(alphabet) = %d", e.key, e.alphaLen)
+func (e ErrFirstKeyNotCoprimeWithAlphabetLen) Error() string {
+	return fmt.Sprintf("first key = %d isn't coprime with len(alphabet) = %d", e.key, e.alphabetLen)
 }
 
 func GCD(first, second int) int {
@@ -186,12 +188,12 @@ func GCD(first, second int) int {
 	return first
 }
 
-func bpow(numb, power, mod int) int {
+func BinaryExponentiation(numb, power, mod int) int {
 	if power == 0 {
 		return 1
 	}
 
-	ans := bpow((numb*numb)%mod, power/2, mod)
+	ans := BinaryExponentiation((numb*numb)%mod, power/2, mod)
 	if (power & 1) == 1 {
 		ans = (ans * numb) % mod
 	}
@@ -209,17 +211,17 @@ func Phi(numb, mod int) int {
 			numb /= i
 		}
 		if cnt != 0 {
-			phi = (phi * bpow(i, cnt-1, mod) * (i - 1)) % mod
+			phi = (phi * BinaryExponentiation(i, cnt-1, mod) * (i - 1)) % mod
 		}
 	}
 
 	return phi
 }
 
-func GetReversed(numb, mod int) int {
+func ReverseNumb(numb, mod int) int {
 	phi := Phi(mod, mod)
 
-	rev := bpow(numb, phi-1, mod)
+	rev := BinaryExponentiation(numb, phi-1, mod)
 	return rev
 }
 
@@ -237,17 +239,17 @@ func AffineEncryption(data EncryptionData) ([]rune, error) {
 		return nil, fmt.Errorf("cannot convert first key to int: %w", err)
 	}
 
-	if key1 < 0 || key1 >= len(data.Alph) {
+	if key1 < 0 || key1 >= len(data.Alphabet) {
 		return nil, ErrKeyOutOfRange{
-			key:      key1,
-			alphaLen: len(data.Alph),
+			key:         key1,
+			alphabetLen: len(data.Alphabet),
 		}
 	}
 
-	if key1 == 0 || GCD(key1, len(data.Alph)) != 1 {
-		return nil, ErrFirstKeyNotCoprimeWithAlphaLen{
-			key:      key1,
-			alphaLen: len(data.Alph),
+	if key1 == 0 || GCD(key1, len(data.Alphabet)) != 1 {
+		return nil, ErrFirstKeyNotCoprimeWithAlphabetLen{
+			key:         key1,
+			alphabetLen: len(data.Alphabet),
 		}
 	}
 
@@ -256,30 +258,30 @@ func AffineEncryption(data EncryptionData) ([]rune, error) {
 		return nil, fmt.Errorf("cannot convert second key to int: %w", err)
 	}
 
-	if key2 < 0 || key2 >= len(data.Alph) {
+	if key2 < 0 || key2 >= len(data.Alphabet) {
 		return nil, ErrKeyOutOfRange{
-			key:      key2,
-			alphaLen: len(data.Alph),
+			key:         key2,
+			alphabetLen: len(data.Alphabet),
 		}
 	}
 
 	if data.isDecrypt {
-		key1 = GetReversed(key1, len(data.Alph))
+		key1 = ReverseNumb(key1, len(data.Alphabet))
 
-		key2 = (-key2 * key1) % len(data.Alph)
-		key2 = (key2 + len(data.Alph)) % len(data.Alph)
+		key2 = (-key2 * key1) % len(data.Alphabet)
+		key2 = (key2 + len(data.Alphabet)) % len(data.Alphabet)
 	}
 
-	encryptedText := make([]rune, len(data.Text))
+	encryptionText := make([]rune, len(data.Text))
 
 	for i, v := range data.Text {
-		num := data.AlphMap[v]
-		num = (key1*num + key2) % len(data.Alph)
-		num = (num + len(data.Alph)) % len(data.Alph)
-		encryptedText[i] = data.Alph[num]
+		num := data.AlphabetMap[v]
+		num = (key1*num + key2) % len(data.Alphabet)
+		num = (num + len(data.Alphabet)) % len(data.Alphabet)
+		encryptionText[i] = data.Alphabet[num]
 	}
 
-	return encryptedText, nil
+	return encryptionText, nil
 }
 
 type ErrInvalidSubstitutionKey string
@@ -289,7 +291,7 @@ func (e ErrInvalidSubstitutionKey) Error() string {
 }
 
 func SubstitutionEncryption(data EncryptionData) ([]rune, error) {
-	if len(data.Key) != len(data.Alph) {
+	if len(data.Key) != len(data.Alphabet) {
 		return nil, ErrInvalidSubstitutionKey("key and alphabet length doesn't match")
 	}
 
@@ -297,7 +299,7 @@ func SubstitutionEncryption(data EncryptionData) ([]rune, error) {
 	existsMap := make(map[rune]struct{})
 
 	for i, v := range data.Key {
-		if _, ok := data.AlphMap[v]; !ok {
+		if _, ok := data.AlphabetMap[v]; !ok {
 			return nil, ErrInvalidSubstitutionKey(fmt.Sprintf("%c isn't contained in alphabet", v))
 		}
 
@@ -308,19 +310,19 @@ func SubstitutionEncryption(data EncryptionData) ([]rune, error) {
 		existsMap[v] = struct{}{}
 
 		if data.isDecrypt {
-			substitutionMap[v] = data.Alph[i]
+			substitutionMap[v] = data.Alphabet[i]
 		} else {
-			substitutionMap[data.Alph[i]] = v
+			substitutionMap[data.Alphabet[i]] = v
 		}
 	}
 
-	encryptedText := make([]rune, len(data.Text))
+	encryptionText := make([]rune, len(data.Text))
 
 	for i, v := range data.Text {
-		encryptedText[i] = substitutionMap[v]
+		encryptionText[i] = substitutionMap[v]
 	}
 
-	return encryptedText, nil
+	return encryptionText, nil
 }
 
 type ErrInvalidHillKey string
@@ -328,6 +330,8 @@ type ErrInvalidHillKey string
 func (e ErrInvalidHillKey) Error() string {
 	return fmt.Sprintf("invalid hill key: %s", string(e))
 }
+
+type ErrInvalidHillDecryptionText string
 
 type Matrix2x2 struct {
 	K11 int
@@ -352,7 +356,7 @@ func (m Matrix2x2) Inverse(mod int) Matrix2x2 {
 	}
 
 	det := m.Determinant(mod)
-	revDet := GetReversed(det, mod)
+	revDet := ReverseNumb(det, mod)
 
 	inv.K11 = (inv.K11 * revDet) % mod
 
@@ -367,6 +371,23 @@ func (m Matrix2x2) Inverse(mod int) Matrix2x2 {
 	return inv
 }
 
+func PadTextToMultiple(text, alphabet []rune, multiple int) ([]rune, error) {
+	maxValue := big.NewInt(int64(len(alphabet)))
+
+	randID, err := rand.Int(rand.Reader, maxValue)
+	if err != nil {
+		return nil, fmt.Errorf("cannot generate random index for alphabet: %w", err)
+	}
+
+	extraSymbol := alphabet[randID.Int64()]
+
+	for len(text)%multiple != 0 {
+		text = append(text, extraSymbol)
+	}
+
+	return text, nil
+}
+
 const (
 	hill2x2KeyLength = 4
 )
@@ -377,54 +398,159 @@ func Hill2x2Encryption(data EncryptionData) ([]rune, error) {
 	}
 
 	for _, v := range data.Key {
-		if _, ok := data.AlphMap[v]; !ok {
+		if _, ok := data.AlphabetMap[v]; !ok {
 			return nil, ErrInvalidHillKey(fmt.Sprintf("%c isn't contained in alphabet", v))
 		}
 	}
 
 	matrix := Matrix2x2{
-		K11: data.AlphMap[data.Key[0]],
-		K12: data.AlphMap[data.Key[1]],
-		K21: data.AlphMap[data.Key[2]],
-		K22: data.AlphMap[data.Key[3]],
+		K11: data.AlphabetMap[data.Key[0]],
+		K12: data.AlphabetMap[data.Key[1]],
+		K21: data.AlphabetMap[data.Key[2]],
+		K22: data.AlphabetMap[data.Key[3]],
 	}
 
-	if det := matrix.Determinant(len(data.Alph)); det == 0 {
+	if det := matrix.Determinant(len(data.Alphabet)); det == 0 {
 		return nil, ErrInvalidHillKey("key determinant mustn't be equal 0")
 	}
 
 	if data.isDecrypt {
-		matrix = matrix.Inverse(len(data.Alph))
+		matrix = matrix.Inverse(len(data.Alphabet))
 	}
 
 	hillKeyBatchLength := int(math.Sqrt(hill2x2KeyLength))
 
 	if len(data.Text)%hillKeyBatchLength != 0 {
-		maxValue := big.NewInt(int64(len(data.Alph)))
-
-		randID, err := rand.Int(rand.Reader, maxValue)
-		if err != nil {
-			return nil, fmt.Errorf("cannot generate random index for alphabet: %w", err)
-		}
-
-		extraSymbol := data.Alph[randID.Int64()]
-
-		for len(data.Text)%hillKeyBatchLength != 0 {
-			data.Text = append(data.Text, extraSymbol)
+		var err error
+		if data.Text, err = PadTextToMultiple(data.Text, data.Alphabet, hillKeyBatchLength); err != nil {
+			return nil, fmt.Errorf(
+				"PadTextToMultiple(%q, %q, %d): %w",
+				data.Text,
+				data.Alphabet,
+				hillKeyBatchLength,
+				err,
+			)
 		}
 	}
 
-	encryptedText := make([]rune, len(data.Text))
+	encryptionText := make([]rune, len(data.Text))
 
 	for i := 0; i < len(data.Text); i += 2 {
-		first, second := data.AlphMap[data.Text[i]], data.AlphMap[data.Text[i+1]]
+		first, second := data.AlphabetMap[data.Text[i]], data.AlphabetMap[data.Text[i+1]]
 		first, second = (first*matrix.K11+second*matrix.K21)%len(
-			data.Alph,
+			data.Alphabet,
 		), (first*matrix.K12+second*matrix.K22)%len(
-			data.Alph,
+			data.Alphabet,
 		)
 
-		encryptedText[i], encryptedText[i+1] = data.Alph[first], data.Alph[second]
+		encryptionText[i], encryptionText[i+1] = data.Alphabet[first], data.Alphabet[second]
+	}
+
+	return encryptionText, nil
+}
+
+type ErrInvalidTranspositionKey string
+
+func (e ErrInvalidTranspositionKey) Error() string {
+	return fmt.Sprintf("invalid transposition key: %s", string(e))
+}
+
+type ErrInvalidTextLength struct {
+	msg string
+}
+
+func (e ErrInvalidTextLength) Error() string {
+	return fmt.Sprintf("invalid text length: %s", e.msg)
+}
+
+func TranspositionEncrypt(data EncryptionData) ([]rune, error) {
+	if len(data.Text)%len(data.Key) != 0 {
+		var err error
+		if data.Text, err = PadTextToMultiple(data.Text, data.Alphabet, len(data.Key)); err != nil {
+			return nil, fmt.Errorf(
+				"PadTextToMultiple(%q, %q, %d): %w",
+				data.Text,
+				data.Alphabet,
+				len(data.Key),
+				err,
+			)
+		}
+	}
+
+	keyTextMap := make(map[rune][]rune)
+
+	for i, v := range data.Text {
+		keyTextMap[data.Key[i%len(data.Key)]] = append(keyTextMap[data.Key[i%len(data.Key)]], v)
+	}
+
+	sortedKeyRunes := slices.SortedFunc(maps.Keys(keyTextMap), func(a, b rune) int {
+		return data.AlphabetMap[a] - data.AlphabetMap[b]
+	})
+
+	encryptedText := make([]rune, len(data.Text))
+
+	for _, v := range sortedKeyRunes {
+		encryptedText = append(encryptedText, keyTextMap[v]...)
+	}
+
+	return encryptedText, nil
+}
+
+func TranspositionDecrypt(data EncryptionData) ([]rune, error) {
+	if len(data.Text)%len(data.Key) != 0 {
+		return nil, ErrInvalidTextLength{msg: "transposition text length must be multiple of key length"}
+	}
+
+	sortedKeyRunes := slices.SortedFunc(slices.Values(data.Key), func(a, b rune) int {
+		return data.AlphabetMap[a] - data.AlphabetMap[b]
+	})
+
+	keyRuneIndexMap := make(map[rune]int)
+
+	for i, v := range data.Key {
+		keyRuneIndexMap[v] = i
+	}
+
+	keyID := 0
+	decryptedText := make([]rune, len(data.Text))
+
+	for _, v := range sortedKeyRunes {
+		for offset := keyRuneIndexMap[v]; offset < len(decryptedText); offset += len(data.Key) {
+			decryptedText[offset] = data.Text[keyID]
+			keyID++
+		}
+	}
+
+	return decryptedText, nil
+}
+
+func Transposition(data EncryptionData) ([]rune, error) {
+	existsMap := make(map[rune]struct{})
+
+	for _, v := range data.Key {
+		if _, ok := data.AlphabetMap[v]; !ok {
+			return nil, ErrInvalidTranspositionKey(fmt.Sprintf("%c isn't contained in alphabet", v))
+		}
+
+		if _, ok := existsMap[v]; ok {
+			return nil, ErrInvalidTranspositionKey(fmt.Sprintf("%c is contained twice", v))
+		}
+
+		existsMap[v] = struct{}{}
+	}
+
+	if data.isDecrypt {
+		decryptedText, err := TranspositionDecrypt(data)
+		if err != nil {
+			return nil, fmt.Errorf("transposition decryption: %w", err)
+		}
+
+		return decryptedText, nil
+	}
+
+	encryptedText, err := TranspositionEncrypt(data)
+	if err != nil {
+		return nil, fmt.Errorf("transposition encryption: %w", err)
 	}
 
 	return encryptedText, nil
@@ -440,14 +566,14 @@ func main() {
 	}
 
 	var (
-		alphFileName string
-		textFileName string
-		keyFileName  string
-		isDecrypt    bool
+		alphabetFileName string
+		textFileName     string
+		keyFileName      string
+		isDecrypt        bool
 	)
 
 	rootCommand.PersistentFlags().
-		StringVarP(&alphFileName, "alphabet", "a", "", "specify alphabet for encryption/decryption")
+		StringVarP(&alphabetFileName, "alphabet", "a", "", "specify alphabet for encryption/decryption")
 
 	rootCommand.PersistentFlags().
 		StringVarP(&textFileName, "text", "t", "", "specify text for encryption/decryption")
@@ -470,17 +596,17 @@ func main() {
 		Use:   "shift",
 		Short: "Shift encryption",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			data, err := NewEncryptionData(alphFileName, textFileName, keyFileName, isDecrypt)
+			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
 			if err != nil {
 				return fmt.Errorf("invalid input: %w", err)
 			}
 
-			encryptedText, err := ShiftEncryption(data)
+			encryptionText, err := ShiftEncryption(data)
 			if err != nil {
 				return fmt.Errorf("cannot apply shift encryption: %w", err)
 			}
 
-			fmt.Println(string(encryptedText))
+			fmt.Println(string(encryptionText))
 			return nil
 		},
 	}
@@ -489,17 +615,17 @@ func main() {
 		Use:   "affine",
 		Short: "Affine encryption",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			data, err := NewEncryptionData(alphFileName, textFileName, keyFileName, isDecrypt)
+			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
 			if err != nil {
 				return fmt.Errorf("invalid input: %w", err)
 			}
 
-			encryptedText, err := AffineEncryption(data)
+			encryptionText, err := AffineEncryption(data)
 			if err != nil {
 				return fmt.Errorf("cannot apply affine encryption: %w", err)
 			}
 
-			fmt.Println(string(encryptedText))
+			fmt.Println(string(encryptionText))
 			return nil
 		},
 	}
@@ -508,17 +634,17 @@ func main() {
 		Use:   "substitution",
 		Short: "Substitution encryption",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			data, err := NewEncryptionData(alphFileName, textFileName, keyFileName, isDecrypt)
+			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
 			if err != nil {
 				return fmt.Errorf("invalid input: %w", err)
 			}
 
-			encryptedText, err := SubstitutionEncryption(data)
+			encryptionText, err := SubstitutionEncryption(data)
 			if err != nil {
 				return fmt.Errorf("cannot apply substitution encryption: %w", err)
 			}
 
-			fmt.Println(string(encryptedText))
+			fmt.Println(string(encryptionText))
 			return nil
 		},
 	}
@@ -527,17 +653,36 @@ func main() {
 		Use:   "hill",
 		Short: "Hill 2x2 encryption",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			data, err := NewEncryptionData(alphFileName, textFileName, keyFileName, isDecrypt)
+			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
 			if err != nil {
 				return fmt.Errorf("invalid input: %w", err)
 			}
 
-			encryptedText, err := Hill2x2Encryption(data)
+			encryptionText, err := Hill2x2Encryption(data)
 			if err != nil {
 				return fmt.Errorf("cannot apply hill 2x2 encryption: %w", err)
 			}
 
-			fmt.Println(string(encryptedText))
+			fmt.Println(string(encryptionText))
+			return nil
+		},
+	}
+
+	transpositionEncryptionCommand := &cobra.Command{
+		Use:   "transposition",
+		Short: "Transposition encryption",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
+			if err != nil {
+				return fmt.Errorf("invalid input: %w", err)
+			}
+
+			encryptionText, err := Transposition(data)
+			if err != nil {
+				return fmt.Errorf("cannot apply transposition encryption: %w", err)
+			}
+
+			fmt.Println(string(encryptionText))
 			return nil
 		},
 	}
@@ -546,6 +691,7 @@ func main() {
 	rootCommand.AddCommand(affineEncryptionCommand)
 	rootCommand.AddCommand(substitutionEncryptionCommand)
 	rootCommand.AddCommand(hillEncryptionCommand)
+	rootCommand.AddCommand(transpositionEncryptionCommand)
 
 	if err := rootCommand.Execute(); err != nil {
 		// ignore error as cobra itself displays it on the screen
