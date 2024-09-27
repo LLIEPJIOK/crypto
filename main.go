@@ -9,8 +9,6 @@ import (
 	"math/big"
 	"os"
 	"slices"
-	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -123,31 +121,32 @@ func NewEncryptionData(
 	return data, nil
 }
 
-type ErrKeyOutOfRange struct {
-	key         int
-	alphabetLen int
+type ErrInvalidKey struct {
+	msg string
 }
 
-func (e ErrKeyOutOfRange) Error() string {
-	return fmt.Sprintf("key = %d out of range [0, len(alphabet)-1 = %d]", e.key, e.alphabetLen-1)
+func NewErrInvalidKey(msg string) error {
+	return ErrInvalidKey{msg: msg}
 }
+
+func (e ErrInvalidKey) Error() string {
+	return e.msg
+}
+
+const (
+	ShiftKeyLen = 1
+)
 
 func ShiftEncryption(data EncryptionData) ([]rune, error) {
-	shift, err := strconv.Atoi(strings.TrimSpace(string(data.Key)))
-	if err != nil {
-		return nil, fmt.Errorf("cannot convert key to int: %w", err)
+	// todo: check key symbols in alphabet
+	if len(data.Key) != ShiftKeyLen {
+		return nil, NewErrInvalidKey(fmt.Sprintf("shift encryption key length must be equal %d", ShiftKeyLen))
 	}
 
-	fmt.Println(shift)
-	if shift < 0 || shift >= len(data.Alphabet) {
-		return nil, ErrKeyOutOfRange{
-			key:         shift,
-			alphabetLen: len(data.Alphabet),
-		}
-	}
+	shift := data.AlphabetMap[data.Key[0]]
 
 	if data.isDecrypt {
-		shift *= -1
+		shift = len(data.Alphabet) - shift
 	}
 
 	encryptionText := make([]rune, len(data.Text))
@@ -155,29 +154,10 @@ func ShiftEncryption(data EncryptionData) ([]rune, error) {
 	for i, v := range data.Text {
 		num := data.AlphabetMap[v]
 		num = (num + shift) % len(data.Alphabet)
-		num = (num + len(data.Alphabet)) % len(data.Alphabet)
 		encryptionText[i] = data.Alphabet[num]
 	}
 
 	return encryptionText, nil
-}
-
-type ErrInvalidNumberOfKeys struct {
-	expected int
-	got      int
-}
-
-func (e ErrInvalidNumberOfKeys) Error() string {
-	return fmt.Sprintf("invalid number of keys: expected: %d, but got: %d", e.expected, e.got)
-}
-
-type ErrFirstKeyNotCoprimeWithAlphabetLen struct {
-	key         int
-	alphabetLen int
-}
-
-func (e ErrFirstKeyNotCoprimeWithAlphabetLen) Error() string {
-	return fmt.Sprintf("first key = %d isn't coprime with len(alphabet) = %d", e.key, e.alphabetLen)
 }
 
 func GCD(first, second int) int {
@@ -225,44 +205,19 @@ func ReverseNumb(numb, mod int) int {
 	return rev
 }
 
+const (
+	AffineKeyLen = 2
+)
+
 func AffineEncryption(data EncryptionData) ([]rune, error) {
-	keys := strings.Fields(string(data.Key))
-	if len(keys) != 2 {
-		return nil, ErrInvalidNumberOfKeys{
-			expected: 2,
-			got:      len(keys),
-		}
+	// todo: check key symbols in alphabet
+	if len(data.Key) != 2 {
+		return nil, NewErrInvalidKey(fmt.Sprintf("affine encryption key length must be equal %d", AffineKeyLen))
 	}
 
-	key1, err := strconv.Atoi(keys[0])
-	if err != nil {
-		return nil, fmt.Errorf("cannot convert first key to int: %w", err)
-	}
-
-	if key1 < 0 || key1 >= len(data.Alphabet) {
-		return nil, ErrKeyOutOfRange{
-			key:         key1,
-			alphabetLen: len(data.Alphabet),
-		}
-	}
-
+	key1, key2 := data.AlphabetMap[data.Key[0]], data.AlphabetMap[data.Key[1]]
 	if key1 == 0 || GCD(key1, len(data.Alphabet)) != 1 {
-		return nil, ErrFirstKeyNotCoprimeWithAlphabetLen{
-			key:         key1,
-			alphabetLen: len(data.Alphabet),
-		}
-	}
-
-	key2, err := strconv.Atoi(keys[1])
-	if err != nil {
-		return nil, fmt.Errorf("cannot convert second key to int: %w", err)
-	}
-
-	if key2 < 0 || key2 >= len(data.Alphabet) {
-		return nil, ErrKeyOutOfRange{
-			key:         key2,
-			alphabetLen: len(data.Alphabet),
-		}
+		return nil, NewErrInvalidKey("first affine key symbol must be coprime with alphabet length")
 	}
 
 	if data.isDecrypt {
@@ -277,7 +232,6 @@ func AffineEncryption(data EncryptionData) ([]rune, error) {
 	for i, v := range data.Text {
 		num := data.AlphabetMap[v]
 		num = (key1*num + key2) % len(data.Alphabet)
-		num = (num + len(data.Alphabet)) % len(data.Alphabet)
 		encryptionText[i] = data.Alphabet[num]
 	}
 
