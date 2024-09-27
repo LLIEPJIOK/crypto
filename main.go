@@ -164,9 +164,7 @@ func NewEncryptionData(
 	return data, nil
 }
 
-const (
-	ShiftKeyLen = 1
-)
+const ShiftKeyLen = 1
 
 func ShiftEncryption(data EncryptionData) ([]rune, error) {
 	if len(data.Key) != ShiftKeyLen {
@@ -237,12 +235,10 @@ func ReverseNumb(numb, mod int) int {
 	return rev
 }
 
-const (
-	AffineKeyLen = 2
-)
+const AffineKeyLen = 2
 
 func AffineEncryption(data EncryptionData) ([]rune, error) {
-	if len(data.Key) != 2 {
+	if len(data.Key) != AffineKeyLen {
 		return nil, NewErrKey(
 			fmt.Sprintf("affine encryption key length must be equal %d", AffineKeyLen),
 		)
@@ -357,9 +353,7 @@ func PadTextToMultiple(text, alphabet []rune, multiple int) ([]rune, error) {
 	return text, nil
 }
 
-const (
-	hill2x2KeyLength = 4
-)
+const hill2x2KeyLength = 4
 
 func Hill2x2Encryption(data EncryptionData) ([]rune, error) {
 	if len(data.Key) != hill2x2KeyLength {
