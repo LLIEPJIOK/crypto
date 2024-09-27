@@ -556,6 +556,40 @@ func Transposition(data EncryptionData) ([]rune, error) {
 	return encryptedText, nil
 }
 
+func ViginereEncryption(data EncryptionData) ([]rune, error) {
+	existsMap := make(map[rune]struct{})
+
+	for _, v := range data.Key {
+		if _, ok := data.AlphabetMap[v]; !ok {
+			return nil, ErrInvalidTranspositionKey(fmt.Sprintf("%c isn't contained in alphabet", v))
+		}
+
+		if _, ok := existsMap[v]; ok {
+			return nil, ErrInvalidTranspositionKey(fmt.Sprintf("%c is contained twice", v))
+		}
+
+		existsMap[v] = struct{}{}
+	}
+
+	if data.isDecrypt {
+		for i, v := range data.Key {
+			num := data.AlphabetMap[v]
+			num = len(data.Alphabet) - num
+			data.Key[i] = data.Alphabet[num]
+		}
+	}
+
+	encryptionText := make([]rune, len(data.Text))
+
+	for i, v := range data.Text {
+		num, keyNum := data.AlphabetMap[v], data.AlphabetMap[data.Key[i%len(data.Key)]]
+		num = (num + keyNum) % len(data.Alphabet)
+		encryptionText[i] = data.Alphabet[num]
+	}
+
+	return encryptionText, nil
+}
+
 func main() {
 	rootCommand := &cobra.Command{
 		Use:   "encryption",
@@ -687,11 +721,31 @@ func main() {
 		},
 	}
 
+	vigenereEncryptionCommand := &cobra.Command{
+		Use:   "vigenere",
+		Short: "Viginere encryption",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
+			if err != nil {
+				return fmt.Errorf("invalid input: %w", err)
+			}
+
+			encryptionText, err := ViginereEncryption(data)
+			if err != nil {
+				return fmt.Errorf("cannot apply vigenere encryption: %w", err)
+			}
+
+			fmt.Println(string(encryptionText))
+			return nil
+		},
+	}
+
 	rootCommand.AddCommand(shiftEncryptionCommand)
 	rootCommand.AddCommand(affineEncryptionCommand)
 	rootCommand.AddCommand(substitutionEncryptionCommand)
 	rootCommand.AddCommand(hillEncryptionCommand)
 	rootCommand.AddCommand(transpositionEncryptionCommand)
+	rootCommand.AddCommand(vigenereEncryptionCommand)
 
 	if err := rootCommand.Execute(); err != nil {
 		// ignore error as cobra itself displays it on the screen
