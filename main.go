@@ -537,8 +537,10 @@ func PrintSuccessfulMsg(isDecrypt bool, outputFileName string) {
 
 func main() {
 	rootCommand := &cobra.Command{
-		Use:   "encryption",
-		Short: "Text encryption console program",
+		Use:   "crypto",
+		Short: "Encryption program",
+		Long: `Crypto is a CLI tool for encrypting and decrypting text using different algorithms.
+You can specify the text, alphabet, key, and output file as well as choose whether to encrypt or decrypt`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return cmd.Help()
 		},
@@ -553,17 +555,17 @@ func main() {
 	)
 
 	rootCommand.PersistentFlags().
-		StringVarP(&alphabetFileName, "alphabet", "a", "", "specify alphabet for encryption/decryption")
+		StringVarP(&alphabetFileName, "alphabet", "a", "", "specify alphabet file for encryption/decryption")
 
 	rootCommand.PersistentFlags().
-		StringVarP(&textFileName, "text", "t", "", "specify text for encryption/decryption")
+		StringVarP(&textFileName, "text", "t", "", "specify text file for encryption/decryption")
 
 	if err := rootCommand.MarkPersistentFlagRequired("text"); err != nil {
 		slog.Error(fmt.Sprintf("cannot make text flag required: %s", err))
 	}
 
 	rootCommand.PersistentFlags().
-		StringVarP(&keyFileName, "key", "k", "", "specify key for encryption/decryption")
+		StringVarP(&keyFileName, "key", "k", "", "specify key file for encryption/decryption")
 
 	if err := rootCommand.MarkPersistentFlagRequired("key"); err != nil {
 		slog.Error(fmt.Sprintf("cannot make key flag required: %s", err))
@@ -578,6 +580,11 @@ func main() {
 	shiftEncryptionCommand := &cobra.Command{
 		Use:   "shift",
 		Short: "Shift encryption",
+		Long: `The shift encryption (also known as Caesar cipher) is a simple substitution cipher where each letter 
+in the text is shifted by a certain number of positions in the alphabet. You must specify the key (one symbol) for how much to shift each character
+
+Example:
+  crypto shift -t "text.txt" -k "key.txt" -a "alphabet.txt" -o output.txt -d`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
 			if err != nil {
@@ -602,6 +609,11 @@ func main() {
 	affineEncryptionCommand := &cobra.Command{
 		Use:   "affine",
 		Short: "Affine encryption",
+		Long: `Affine encryption is an encryption method that uses linear functions to encrypt the text.
+It requires two keys (symbols from alphabet) to perform encryption (a multiplier and an offset). Multiplier must be coprime with alphabet length
+
+Example:
+  crypto affine -t "text.txt" -k "key.txt" -a "alphabet.txt" -o output.txt -d`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
 			if err != nil {
@@ -626,6 +638,10 @@ func main() {
 	substitutionEncryptionCommand := &cobra.Command{
 		Use:   "substitution",
 		Short: "Substitution encryption",
+		Long: `Substitution encryption replaces each letter in the plaintext with another letter based on the provided key. The key must be a permutation of the alphabet characters
+
+Example:
+  crypto substitution -t "text.txt" -k "key.txt" -a "alphabet.txt" -o output.txt -d`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
 			if err != nil {
@@ -650,6 +666,10 @@ func main() {
 	hillEncryptionCommand := &cobra.Command{
 		Use:   "hill",
 		Short: "Hill 2x2 encryption",
+		Long: `Hill cipher is a cipher based on linear algebra, where each block of plaintext is multiplied by a 2x2 matrix. The determinant of a matrix must not be equal to zero. The key must consist of 4 characters that form a matrix: k11, k12, k21 and k22
+
+Example:
+  crypto hill -t "text.txt" -k "key.txt" -a "alphabet.txt" -o output.txt -d`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
 			if err != nil {
@@ -674,6 +694,10 @@ func main() {
 	transpositionEncryptionCommand := &cobra.Command{
 		Use:   "transposition",
 		Short: "Transposition encryption",
+		Long: `Transposition encryption scrambles the letters of the text according to a certain system, keeping the same characters but changing their positions. Key must be a word without repeating symbols
+
+Example:
+  crypto transposition -t "text.txt" -k "key.txt" -a "alphabet.txt" -o output.txt -d`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
 			if err != nil {
@@ -698,6 +722,10 @@ func main() {
 	vigenereEncryptionCommand := &cobra.Command{
 		Use:   "vigenere",
 		Short: "Viginere encryption",
+		Long: `Vigenere cipher is a method of encrypting alphabetic text using a series of Caesar ciphers based on the letters of a key
+
+Example:
+  crypto vigenere -t "text.txt" -k "key.txt" -a "alphabet.txt" -o output.txt -d`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			data, err := NewEncryptionData(alphabetFileName, textFileName, keyFileName, isDecrypt)
 			if err != nil {
