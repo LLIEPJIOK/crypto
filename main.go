@@ -315,8 +315,8 @@ func (m Matrix2x2) Determinant(mod int) int {
 func (m Matrix2x2) Inverse(mod int) Matrix2x2 {
 	inv := Matrix2x2{
 		K11: m.K22,
-		K12: (-m.K12) % mod,
-		K21: (-m.K21) % mod,
+		K12: mod - m.K12,
+		K21: mod - m.K21,
 		K22: m.K11,
 	}
 
@@ -367,8 +367,8 @@ func Hill2x2Encryption(data EncryptionData) ([]rune, error) {
 		K22: data.AlphabetMap[data.Key[3]],
 	}
 
-	if det := matrix.Determinant(len(data.Alphabet)); det == 0 {
-		return nil, NewErrKey("hill key determinant mustn't be equal 0")
+	if det := matrix.Determinant(len(data.Alphabet)); det == 0 || GCD(det, len(data.Alphabet)) != 1 {
+		return nil, NewErrKey("hill key determinant must be coprime with alphabet length")
 	}
 
 	if data.isDecrypt {
@@ -430,7 +430,7 @@ func TranspositionEncrypt(data EncryptionData) ([]rune, error) {
 		return data.AlphabetMap[a] - data.AlphabetMap[b]
 	})
 
-	encryptedText := make([]rune, len(data.Text))
+	encryptedText := make([]rune, 0, len(data.Text))
 
 	for _, v := range sortedKeyRunes {
 		encryptedText = append(encryptedText, keyTextMap[v]...)
@@ -498,16 +498,6 @@ func Transposition(data EncryptionData) ([]rune, error) {
 }
 
 func ViginereEncryption(data EncryptionData) ([]rune, error) {
-	existsMap := make(map[rune]struct{})
-
-	for _, v := range data.Key {
-		if _, ok := existsMap[v]; ok {
-			return nil, NewErrKey(fmt.Sprintf("vigenere key symbol `%c` is contained twice", v))
-		}
-
-		existsMap[v] = struct{}{}
-	}
-
 	if data.isDecrypt {
 		for i, v := range data.Key {
 			num := data.AlphabetMap[v]
