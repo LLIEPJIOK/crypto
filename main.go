@@ -89,6 +89,10 @@ func ValidateText(text []rune, alphabetMap map[rune]int) error {
 }
 
 func ValidateKey(key []rune, alphabetMap map[rune]int) error {
+	if len(key) == 0 {
+		return NewErrKey("key is empty")
+	}
+
 	for _, v := range key {
 		if _, ok := alphabetMap[v]; !ok {
 			return NewErrKey(fmt.Sprintf("key contains symbol '%c' that isn't in alphabet", v))
