@@ -74,19 +74,11 @@ func ValidateAlphabet(alphabet []rune) error {
 	return nil
 }
 
-func ValidateString(str []rune, name string, alphabetMap map[rune]int) error {
-	for _, v := range str {
-		if _, ok := alphabetMap[v]; !ok {
-			return NewErrText(
-				fmt.Sprintf("%s contains symbol '%c' that isn't in alphabet", name, v),
-			)
-		}
+func ValidateText(text []rune, alphabetMap map[rune]int) error {
+	if len(text) == 0 {
+		return NewErrText("text is empty")
 	}
 
-	return nil
-}
-
-func ValidateText(text []rune, alphabetMap map[rune]int) error {
 	for _, v := range text {
 		if _, ok := alphabetMap[v]; !ok {
 			return NewErrText(fmt.Sprintf("text contains symbol '%c' that isn't in alphabet", v))
