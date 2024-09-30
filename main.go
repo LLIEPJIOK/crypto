@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log/slog"
-	"maps"
 	"math"
 	"math/big"
 	"os"
@@ -420,20 +419,22 @@ func TranspositionEncrypt(data EncryptionData) ([]rune, error) {
 		}
 	}
 
-	keyTextMap := make(map[rune][]rune)
-
-	for i, v := range data.Text {
-		keyTextMap[data.Key[i%len(data.Key)]] = append(keyTextMap[data.Key[i%len(data.Key)]], v)
-	}
-
-	sortedKeyRunes := slices.SortedFunc(maps.Keys(keyTextMap), func(a, b rune) int {
+	sortedKeyRunes := slices.SortedFunc(slices.Values(data.Key), func(a, b rune) int {
 		return data.AlphabetMap[a] - data.AlphabetMap[b]
 	})
 
-	encryptedText := make([]rune, 0, len(data.Text))
+	sortedKeyRuneIndexMap := make(map[rune]int)
 
-	for _, v := range sortedKeyRunes {
-		encryptedText = append(encryptedText, keyTextMap[v]...)
+	for i, v := range sortedKeyRunes {
+		sortedKeyRuneIndexMap[v] = i
+	}
+
+	encryptedText := make([]rune, len(data.Text))
+
+	for i := range data.Text {
+		curNum := i % len(data.Key)
+		num := sortedKeyRuneIndexMap[data.Key[curNum]]
+		encryptedText[i+num-curNum] = data.Text[i]
 	}
 
 	return encryptedText, nil
@@ -444,24 +445,22 @@ func TranspositionDecrypt(data EncryptionData) ([]rune, error) {
 		return nil, NewErrText("transposition text length must be multiple of key length")
 	}
 
-	sortedKeyRunes := slices.SortedFunc(slices.Values(data.Key), func(a, b rune) int {
-		return data.AlphabetMap[a] - data.AlphabetMap[b]
-	})
-
 	keyRuneIndexMap := make(map[rune]int)
 
 	for i, v := range data.Key {
 		keyRuneIndexMap[v] = i
 	}
 
-	keyID := 0
+	sortedKeyRunes := slices.SortedFunc(slices.Values(data.Key), func(a, b rune) int {
+		return data.AlphabetMap[a] - data.AlphabetMap[b]
+	})
+
 	decryptedText := make([]rune, len(data.Text))
 
-	for _, v := range sortedKeyRunes {
-		for offset := keyRuneIndexMap[v]; offset < len(decryptedText); offset += len(data.Key) {
-			decryptedText[offset] = data.Text[keyID]
-			keyID++
-		}
+	for i := range data.Text {
+		curNum := i % len(data.Key)
+		num := keyRuneIndexMap[sortedKeyRunes[curNum]]
+		decryptedText[i+num-curNum] = data.Text[i]
 	}
 
 	return decryptedText, nil
