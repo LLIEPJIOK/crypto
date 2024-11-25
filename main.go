@@ -159,6 +159,27 @@ func NewEncryptionData(
 	return data, nil
 }
 
+func NewFrequentAnalysisData(
+	textFileName string,
+) (EncryptionData, error) {
+	data := EncryptionData{}
+
+	data.Alphabet = []rune("ETAOINSHRDLCUMWFGYPBVKXJQZ")
+	text, err := os.ReadFile(textFileName)
+	if err != nil {
+		return EncryptionData{}, fmt.Errorf("read text file %q: %w", textFileName, err)
+	}
+
+	data.AlphabetMap = GetMapFromAlphabet(data.Alphabet)
+
+	data.Text = []rune(string(text))
+	if err := ValidateText(data.Text, data.AlphabetMap); err != nil {
+		return EncryptionData{}, fmt.Errorf("invalid text: %w", err)
+	}
+
+	return data, nil
+}
+
 const ShiftKeyLen = 1
 
 func ShiftEncryption(data EncryptionData) ([]rune, error) {
@@ -215,6 +236,7 @@ func Phi(numb, mod int) int {
 			cnt++
 			numb /= i
 		}
+
 		if cnt != 0 {
 			phi = (phi * BinaryExponentiation(i, cnt-1, mod) * (i - 1)) % mod
 		}
@@ -367,6 +389,7 @@ func Hill2x2Encryption(data EncryptionData) ([]rune, error) {
 	}
 
 	if data.isDecrypt {
+		// todo: check text length
 		matrix = matrix.Inverse(len(data.Alphabet))
 	}
 
